@@ -1,0 +1,19 @@
+# SearXNG config for benchmark live tool mode.
+# use_default_settings: true inherits all default engines (Google, Bing, DuckDuckGo, etc.)
+use_default_settings: true
+
+server:
+  secret_key: "benchmark-searxng-local-only"
+  limiter: false        # no rate limiting — this is a private local instance
+  image_proxy: false
+  port: 8080
+  bind_address: "0.0.0.0"
+
+ui:
+  static_use_hash: true
+
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json            # must be explicitly enabled — disabled by default for security

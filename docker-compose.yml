@@ -1,0 +1,30 @@
+services:
+
+  searxng:
+    image: searxng/searxng:latest
+    container_name: benchmark-searxng
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8080/
+
+  benchmark:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: benchmark-runner
+    network_mode: host
+    user: "${UID:-1000}:${GID:-1000}"
+    environment:
+      - OLLAMA_HOST=http://localhost:11434
+      - SEARXNG_URL=http://localhost:8080
+    env_file:
+      - .env
+    volumes:
+      - ./results:/app/results
+      - ./tests:/app/tests
+    profiles:
+      - run
