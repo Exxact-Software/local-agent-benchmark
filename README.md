@@ -1,8 +1,12 @@
 # Local Agent Benchmark
 
-A reproducible benchmark for **local AI agent behavior** — running structured tests against any model exposed via Ollama's OpenAI-compatible API. Measures whether a model can act as a reliable agent: calling tools, handling bad outputs, following instructions under load, and sustaining multi-step chains.
+A reproducible benchmark for **local AI agent behavior** — running structured tests against any model served over an OpenAI-compatible API. Measures whether a model can act as a reliable agent: calling tools, handling bad outputs, following instructions under load, and sustaining multi-step chains.
 
-The reference platform is the NVIDIA DGX Spark. Results are in [`docs/results-dgx-spark.md`](docs/results-dgx-spark.md).
+Two things it answers that a tokens-per-second number cannot: *does this model behave like an agent*, and *how many of them does this machine hold before it stops behaving like one*.
+
+Published results are in [`docs/results/`](docs/results/) — currently the NVIDIA DGX Spark and the NVIDIA DGX Station GB300. Backend setup is in [`docs/backends/`](docs/backends/) (Ollama and vLLM), and how scoring works is in [`docs/methodology.md`](docs/methodology.md).
+
+> **Comparing numbers?** Every `results.json` records the `suite_version` that scored it, and scores are only comparable across matching versions. [`CHANGELOG.md`](CHANGELOG.md) records what each version changed and how much it moved.
 
 ---
 
@@ -34,6 +38,18 @@ This benchmark focuses on **agent behavior**:
 | Edge Cases | T16–T17 | Knowing when not to call a tool, state mutation tracking |
 
 **T-HOP** — Escalating multi-hop chain capped at 50 hops. Each tool result becomes the next step's input. Records the hop where the chain breaks or the model stops calling tools.
+
+**Concurrency mode** — `scripts/swarm.py` runs N independent agents against one endpoint, each in its own process with its own conversation and tool state, and reports pass rate, wall clock, median session time and sessions per minute at each agent count. This is what answers "how many agents does this machine hold", and it is a different question from throughput.
+
+```bash
+# One point
+python3 scripts/swarm.py --model <served-model-name> --agents 64 --skip-hop
+
+# Sweep — the curve is the point
+python3 scripts/swarm.py --model <served-model-name> --sweep 1,4,8,16,32,64 --skip-hop
+```
+
+`--skip-hop` is usually right for sweeps: T-HOP's 50-hop cap dominates wall clock at high agent counts. Measure chain depth in a separate, smaller run.
 
 ---
 
@@ -163,12 +179,20 @@ local-agent-benchmark/
 │   └── tools_live.py           # Live tool implementations (SearXNG + Open-Meteo + Google Maps)
 ├── scripts/
 │   ├── run_all.sh              # Run all configured models in sequence
+│   ├── swarm.py                # Concurrency mode — N agents against one endpoint
 │   └── summarize.py            # Aggregate results into a markdown table
 ├── searxng/
 │   └── settings.yml            # SearXNG config (JSON API enabled, no rate limits)
 └── docs/
     ├── setup.md                # Full setup guide from scratch
-    └── results-dgx-spark.md    # DGX Spark reference results
+    ├── methodology.md          # How scoring works; reasoning models; reading a pass rate
+    ├── backends/
+    │   ├── ollama.md           # Native tool calling, no parser config
+    │   └── vllm.md             # Parser config, reference serving commands
+    └── results/
+        ├── README.md           # Index + how to compare across machines
+        ├── dgx-spark.md        # DGX Spark reference results
+        └── dgx-station-gb300.md
 ```
 
 ---

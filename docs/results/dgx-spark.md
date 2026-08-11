@@ -2,7 +2,14 @@
 
 These are the reference results for the benchmark, run on an NVIDIA DGX Spark. They are intended as a comparison point for anyone running the benchmark on their own hardware.
 
-The full write-up (motivation, methodology, model selection, and analysis) is in the accompanying blog post.
+The full write-up (motivation, methodology, model selection, and analysis) is in the accompanying blog post: [Benchmarking Local AI Agents on NVIDIA DGX Spark](https://www.exxactcorp.com/blog/benchmarks/benchmarking-local-ai-agents-on-nvidia-dgx-spark).
+
+**Suite version:** 1.0.0 · **Backend:** Ollama · **Mode:** sequential
+
+> These results were produced by scorer version 1.0.0 and are **unaffected** by the
+> reasoning-strip fix in 1.1.0 — Ollama returns reasoning in a separate field, so the
+> scorer never saw a thinking block. See [`CHANGELOG.md`](../../CHANGELOG.md) for detail,
+> and [`../results/`](README.md) for results on other machines.
 
 ---
 
