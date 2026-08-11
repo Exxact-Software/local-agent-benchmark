@@ -1,8 +1,9 @@
 # Environment
 .env
 
-# Benchmark output
-results/
+# Benchmark output — anchored to the repo root so it does not also swallow
+# docs/results/, which is tracked documentation.
+/results/
 
 # Python
 __pycache__/

@@ -6,6 +6,7 @@ Usage: python -m tests.harness --model nemotron-3-nano:4b [--machine dgx-spark] 
 import argparse
 import json
 import os
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,7 +23,18 @@ load_dotenv()
 
 console = Console()
 
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+# Scorer version. Bump whenever a change can move a score, and record what moved in
+# CHANGELOG.md. Written into every results.json so scores are only ever compared across
+# matching versions.
+SUITE_VERSION = "1.1.0"
+
+# Endpoint of any OpenAI-compatible server (the harness appends /v1). OLLAMA_HOST is the
+# original name, kept as a fallback so existing setups and scripts keep working.
+BENCH_BASE_URL = os.getenv(
+    "BENCH_BASE_URL", os.getenv("OLLAMA_HOST", "http://localhost:11434")
+)
+OLLAMA_HOST = BENCH_BASE_URL  # deprecated alias
+
 RESULTS_DIR = Path(os.getenv("RESULTS_DIR", "./results"))
 HOP_CAP = 50
 MAX_ROUNDS = 5  # max tool-call rounds per T1–T17 test
@@ -30,6 +42,35 @@ MAX_ROUNDS = 5  # max tool-call rounds per T1–T17 test
 
 def get_client():
     return OpenAI(base_url=f"{OLLAMA_HOST}/v1", api_key="ollama")
+
+
+THINK_BLOCK = re.compile(r"<think>.*?</think>\s*", re.DOTALL | re.IGNORECASE)
+UNCLOSED_THINK = re.compile(r"^.*?</think>\s*", re.DOTALL)
+
+
+def strip_reasoning(text: str) -> str:
+    """Remove <think>...</think> blocks so scoring sees only the final answer.
+
+    Reasoning models emit their chain of thought inline in `content` unless the
+    server splits it out into `reasoning_content` (vLLM's --reasoning-parser).
+    Scoring the raw string judges the model on what it *thought* rather than
+    what it *answered*, which produces false failures: valid JSON preceded by a
+    think block reads as "not valid JSON", and a model reasoning about why it
+    should refuse a prompt injection reads as having leaked the thing it
+    refused to leak.
+
+    Stripping thinking before answer extraction is standard eval practice.
+    We strip here rather than at request time so the stored transcript keeps
+    the full reasoning trace and old results stay re-scorable.
+    """
+    if not text:
+        return text
+    out = THINK_BLOCK.sub("", text)
+    if "</think>" in out:
+        # Unbalanced closer — opener was consumed by the chat template, or the
+        # generation was truncated mid-block. Drop everything up to the close.
+        out = UNCLOSED_THINK.sub("", out)
+    return out.strip()
 
 
 def score_result(test: dict, result: dict):
@@ -41,8 +82,9 @@ def score_result(test: dict, result: dict):
     tid = test["id"]
     tool_calls = result.get("tool_calls", [])
     tool_names = [tc["name"] for tc in tool_calls]
-    response_lower = (result.get("response") or "").lower()
-    response_raw = (result.get("response") or "").strip()
+    response_text = strip_reasoning(result.get("response") or "")
+    response_lower = response_text.lower()
+    response_raw = response_text.strip()
 
     if tid == "T1":
         if "get_weather" not in tool_names:
@@ -539,12 +581,15 @@ def run_all(
     out_file = out_dir / "results.json"
 
     output = {
+        "suite_version": SUITE_VERSION,
         "model": model,
         "machine": machine,
         "run": run,
         "live_tools": live,
         "run_date": datetime.now(timezone.utc).isoformat(),
-        "ollama_host": OLLAMA_HOST,
+        "endpoint": BENCH_BASE_URL,
+        # Retained under the old key so existing tooling keeps working.
+        "ollama_host": BENCH_BASE_URL,
         "tests": results,
     }
 
